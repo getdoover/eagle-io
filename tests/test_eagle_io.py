@@ -189,14 +189,17 @@ async def test_mapped_points_become_tags_with_history(monkeypatch):
         "river_level": ms("2026-01-01T01:00:00Z"),
         "rain_total": ms("2026-01-01T01:00:00Z"),
     }
-    # Every reading lands in history at its own time; each tag gets its own
-    # millisecond so a later poll can't overwrite another tag's reading.
+    # Every reading lands in history at its own time, tags read together in one message.
     assert sorted(app.history, key=lambda h: h[0]) == [
-        (ms("2026-01-01T00:00:00Z"), {"eagle_io_1": {"river_level": 1.234}}),
-        (ms("2026-01-01T00:00:00Z") + 1, {"eagle_io_1": {"rain_total": 100.0}}),
+        (
+            ms("2026-01-01T00:00:00Z"),
+            {"eagle_io_1": {"river_level": 1.234, "rain_total": 100.0}},
+        ),
         (ms("2026-01-01T00:30:00Z"), {"eagle_io_1": {"river_level": 1.24}}),
-        (ms("2026-01-01T01:00:00Z"), {"eagle_io_1": {"river_level": 1.251}}),
-        (ms("2026-01-01T01:00:00Z") + 1, {"eagle_io_1": {"rain_total": 100.4}}),
+        (
+            ms("2026-01-01T01:00:00Z"),
+            {"eagle_io_1": {"river_level": 1.251, "rain_total": 100.4}},
+        ),
     ]
     # Unmapped points (battery, serial) are not recorded as tags.
     assert all(

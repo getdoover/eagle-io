@@ -89,22 +89,14 @@ def tag_readings(
     return readings
 
 
-def history_messages(
-    readings: dict[str, list[tuple[int, object]]], order: list[str]
-) -> dict[int, dict]:
-    """ms -> {tag: value}, one entry per reading.
-
-    Doover keys a history message by its timestamp, so a later message at the
-    same millisecond replaces an earlier one. Points often arrive in different
-    polls for the same record time (a logger's rain lands an upload after its
-    level), so each tag is offset by its position in milliseconds and never
-    shares a message with another.
-    """
-    messages: dict[int, dict] = {}
-    for offset, tag in enumerate(order):
-        for ms, value in readings.get(tag, []):
-            messages[ms + offset] = {tag: value}
-    return messages
+def history_messages(readings: dict[str, list[tuple[int, object]]]) -> dict[int, dict]:
+    """ms -> {tag: value}: one history message per reading time, holding every
+    mapped tag read at that time."""
+    messages: dict[int, dict] = defaultdict(dict)
+    for tag, values in readings.items():
+        for ms, value in values:
+            messages[ms][tag] = value
+    return dict(messages)
 
 
 class EagleIo(Application):
@@ -191,10 +183,9 @@ class EagleIo(Application):
         tags = {pid: p.tag for pid, p in points.items() if p.tag}
         if not tags:
             return 0
-        order = list(dict.fromkeys(tags.values()))
         readings = tag_readings(docs, tags)
 
-        messages = history_messages(readings, order)
+        messages = history_messages(readings)
         for ms in sorted(messages):
             await self.api.create_message(
                 "tag_values", {self.app_key: messages[ms]}, timestamp=ms

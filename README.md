@@ -55,11 +55,9 @@ the same channel.
 
 ## Tags
 
-Each mapped point's tag holds its newest reading. Its history is one
-`tag_values` message per reading, at the reading's time plus the tag's position
-in milliseconds: Doover keys messages by time, and a logger's points can arrive
-in different polls for the same record time, so tags never share a message.
-A late upload of older readings goes into history without replacing a newer
+Each mapped point's tag holds its newest reading. Its history goes into
+`tag_values` at each reading's own time, one message per time with every
+mapped tag read then. A late upload of older readings goes into history without replacing a newer
 current value (`tag_times` tracks the time each tag holds).
 
 The app's own bookkeeping tags: `modified_since` (end of the last poll's window, the cursor), `last_poll_at`,
