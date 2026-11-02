@@ -141,6 +141,7 @@ def fake_app(
             api_key=value("key"),
             base_url=value(api.DEFAULT_URL),
             first_poll_hours=value(24.0),
+            offline_after_minutes=value(120.0),
             target_channel=value(channel),
         ),
         tags=SimpleNamespace(
@@ -169,6 +170,14 @@ def fake_app(
         history=history,
         current=current,
     )
+    pings = []
+
+    async def ping_connection(online_at=None, offline_at=None):
+        pings.append((online_at, offline_at))
+
+    fake.ping_connection = ping_connection
+    fake.pings = pings
+    fake.ping_from_readings = lambda: EagleIo.ping_from_readings(fake)
     fake.record_tags = lambda docs, points: EagleIo.record_tags(fake, docs, points)
     return fake
 
@@ -299,3 +308,10 @@ async def test_time_tag_never_goes_backwards(monkeypatch):
     app.current["rain_time"] = newer
     await EagleIo.poll(app)
     assert app.current["rain_time"] == newer
+
+
+async def test_poll_pings_online_as_of_the_newest_reading(monkeypatch):
+    app = fake_app(monkeypatch)
+    await EagleIo.poll(app)
+    newest = datetime.fromisoformat("2026-01-01T01:00:00Z")
+    assert app.pings == [(newest, newest + timedelta(minutes=120))]

@@ -200,6 +200,8 @@ class EagleIo(Application):
                 )
                 relayed += record_count(doc)
 
+        await self.ping_from_readings()
+
         await self.tags.modified_since.set(api.iso(now))
         await self.tags.last_poll_at.set(int(now.timestamp() * 1000))
         await self.tags.points.set(len(points))
@@ -260,6 +262,22 @@ class EagleIo(Application):
                 await self.set_tag(key, ms)
         await self.tags.tag_times.set(times)
         return len(items)
+
+    async def ping_from_readings(self) -> None:
+        """Mark the device online as of its newest recorded reading.
+
+        Pinged every poll, so a source that goes quiet shows offline once its
+        newest reading is older than Offline After, the same way BoM Station
+        does.
+        """
+        times = (self.tags.tag_times.value or {}).values()
+        if not times:
+            return
+        latest = datetime.fromtimestamp(max(times) / 1000, UTC)
+        minutes = self.config.offline_after_minutes.value or 120
+        await self.ping_connection(
+            online_at=latest, offline_at=latest + timedelta(minutes=minutes)
+        )
 
     def _points(self, base_url: str, api_key: str) -> dict[str, Point]:
         node_id = (self.config.node_id.value or "").strip()

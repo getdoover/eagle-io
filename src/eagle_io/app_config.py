@@ -94,6 +94,17 @@ class EagleIoConfig(config.Schema):
             "last one. Longer history is a one-off backfill, not this app's job."
         ),
     )
+    offline_after_minutes = config.Number(
+        "Offline After (minutes)",
+        name="offline_after_minutes",
+        default=120.0,
+        minimum=5.0,
+        advanced=True,
+        description=(
+            "The device shows offline once its newest recorded reading is "
+            "older than this. Set it above the source's upload interval."
+        ),
+    )
     base_url = config.String(
         "API URL",
         name="base_url",

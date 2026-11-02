@@ -38,6 +38,7 @@ minutes per IP address.
 | **Location or Data Source ID** | Follow every point under this location or source, under its eagle.io name. |
 | **Points** | Points to follow by id, each with an optional **Name**, **Tag** and **Time Tag**. **Name** renames the JTS column, and so the tag the renderer writes (`River Level` → `river_level`). **Tag** records the point as a tag of this app (e.g. `river_level`). **Time Tag** records when that reading was taken, in ms (e.g. `river_level_time`); points can share one, such as `rain_time` for every rain figure, and it then holds the newest of their times. Listing a point already under the location just applies these settings. |
 | **Target Channel** | Where JTS batches go (default `eagle_io`). Set the JTS Renderer's subscription and Source Channel to the same name. Leave blank to only record tags. |
+| **Offline After (minutes)** *(advanced)* | Each poll marks the device online as of its newest recorded reading; it shows offline once that is older than this (default 120). |
 | **First Poll (hours)** *(advanced)* | How far back a new install reads (default 24). |
 | **Schedule** *(advanced)* | Default every 15 minutes. |
 

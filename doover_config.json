@@ -149,6 +149,21 @@
                     "x-advanced": true,
                     "minimum": 0.0
                 },
+                "offline_after_minutes": {
+                    "title": "Offline After (minutes)",
+                    "x-name": "offline_after_minutes",
+                    "x-hidden": false,
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "description": "The device shows offline once its newest recorded reading is older than this. Set it above the source's upload interval.",
+                    "default": 120.0,
+                    "x-position": 5,
+                    "x-advanced": true,
+                    "minimum": 5.0
+                },
                 "base_url": {
                     "title": "API URL",
                     "x-name": "base_url",
@@ -159,7 +174,7 @@
                     ],
                     "x-required": false,
                     "default": "https://api.eagle.io/api/v1",
-                    "x-position": 5,
+                    "x-position": 6,
                     "x-advanced": true
                 },
                 "dv_proc_schedules": {
@@ -174,7 +189,7 @@
                     "x-required": false,
                     "description": "Specify a schedule to run this task.",
                     "default": "rate(15 minutes)",
-                    "x-position": 6,
+                    "x-position": 7,
                     "x-advanced": true
                 }
             },
