@@ -1,0 +1,21 @@
+{
+  "docType": "jts",
+  "subType": "TIMESERIES",
+  "version": "1.0",
+  "header": {
+    "startTime": "2026-01-01T00:00:00.000Z",
+    "endTime": "2026-01-01T01:00:00.000Z",
+    "recordCount": 3,
+    "columns": {
+      "0": {"id": "000000000000000000000001", "name": "Battery Voltage", "dataType": "NUMBER", "aggregate": "NONE", "format": "0.###", "renderType": "VALUE", "units": "V"},
+      "1": {"id": "000000000000000000000002", "name": "Water Level", "dataType": "NUMBER", "aggregate": "NONE", "format": "0.###", "renderType": "VALUE", "units": "m"},
+      "2": {"id": "000000000000000000000003", "name": "Rainfall Total", "dataType": "NUMBER", "aggregate": "NONE", "format": "0.###", "renderType": "VALUE", "units": "mm"},
+      "3": {"id": "000000000000000000000004", "name": "Logger Serial", "dataType": "TEXT", "aggregate": "NONE", "renderType": "VALUE"}
+    }
+  },
+  "data": [
+    {"ts": "2026-01-01T00:00:00.000Z", "f": {"0": {"v": 13.2}, "1": {"v": 1.234}, "2": {"v": 100.0}, "3": {"v": "EXAMPLE"}}},
+    {"ts": "2026-01-01T00:30:00.000Z", "f": {"0": {"v": 13.1}, "1": {"v": 1.240}}},
+    {"ts": "2026-01-01T01:00:00.000Z", "f": {"0": {"v": 13.1}, "1": {"v": 1.251}, "2": {"v": 100.4}}}
+  ]
+}

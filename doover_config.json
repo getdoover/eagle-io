@@ -1,0 +1,161 @@
+{
+    "eagle_io": {
+        "name": "eagle_io",
+        "display_name": "eagle.io",
+        "type": "PRO",
+        "visibility": "PUB",
+        "allow_many": true,
+        "description": "Polls eagle.io for newly arrived readings from a location's points and relays them to a Doover channel as JTS, for a JTS Renderer to turn into tags.",
+        "long_description": "README.md",
+        "depends_on": [],
+        "export_config_command": "export-config",
+        "export_ui_command": "NO_EXPORT",
+        "lambda_config": {
+            "Environment": {},
+            "Runtime": "python3.13",
+            "Timeout": 60,
+            "Handler": "src.eagle_io.handler",
+            "MemorySize": 128,
+            "Architectures": [
+                "arm64"
+            ]
+        },
+        "config_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "",
+            "title": "$default",
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "title": "API Key",
+                    "x-name": "api_key",
+                    "x-hidden": false,
+                    "type": "string",
+                    "x-required": true,
+                    "description": "An eagle.io API key with read access to the points below.",
+                    "x-position": 0
+                },
+                "node_id": {
+                    "title": "Location or Data Source ID",
+                    "x-name": "node_id",
+                    "x-hidden": false,
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "description": "Every point under this eagle.io location (or data source) is followed, under its own name. Leave blank to follow only the points listed below.",
+                    "default": null,
+                    "x-position": 1
+                },
+                "points": {
+                    "title": "Points",
+                    "x-name": "points",
+                    "x-hidden": false,
+                    "type": "array",
+                    "x-required": true,
+                    "description": "Points to follow by id, or to rename. A point listed here that is also under the location above is followed once, under this name.",
+                    "x-position": 2,
+                    "items": {
+                        "title": "Point",
+                        "x-name": "point",
+                        "x-hidden": false,
+                        "type": "object",
+                        "x-required": true,
+                        "properties": {
+                            "point_id": {
+                                "title": "Point ID",
+                                "x-name": "point_id",
+                                "x-hidden": false,
+                                "type": "string",
+                                "x-required": true,
+                                "description": "The eagle.io point's 24-character node id.",
+                                "x-position": 1
+                            },
+                            "name": {
+                                "title": "Name",
+                                "x-name": "name",
+                                "x-hidden": false,
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "x-required": false,
+                                "description": "Column name to publish the point under, which consumers such as the JTS Renderer turn into the tag key ('River Level' -> river_level). Leave blank to keep the point's eagle.io name.",
+                                "default": null,
+                                "x-position": 2
+                            }
+                        },
+                        "additionalElements": true,
+                        "required": [
+                            "point_id"
+                        ],
+                        "x-collapsible": true,
+                        "x-defaultCollapsed": false
+                    }
+                },
+                "target_channel": {
+                    "title": "Target Channel",
+                    "x-name": "target_channel",
+                    "x-hidden": false,
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "description": "Doover channel each batch of new records is written to, as {\"source\": \"eagle.io\", \"payload\": <JTS>}. Point a JTS Renderer's subscription at it.",
+                    "default": "eagle_io",
+                    "x-position": 3
+                },
+                "first_poll_hours": {
+                    "title": "First Poll (hours)",
+                    "x-name": "first_poll_hours",
+                    "x-hidden": false,
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "description": "How far back the first poll reads. Later polls carry on from the last one. Longer history is a one-off backfill, not this app's job.",
+                    "default": 24.0,
+                    "x-position": 4,
+                    "x-advanced": true,
+                    "minimum": 0.0
+                },
+                "base_url": {
+                    "title": "API URL",
+                    "x-name": "base_url",
+                    "x-hidden": false,
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "default": "https://api.eagle.io/api/v1",
+                    "x-position": 5,
+                    "x-advanced": true
+                },
+                "dv_proc_schedules": {
+                    "title": "Schedule",
+                    "x-name": "dv_proc_schedules",
+                    "x-hidden": false,
+                    "format": "doover-schedule-rate-cron",
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "x-required": false,
+                    "description": "Specify a schedule to run this task.",
+                    "default": "rate(15 minutes)",
+                    "x-position": 6,
+                    "x-advanced": true
+                }
+            },
+            "additionalElements": true,
+            "required": [
+                "api_key",
+                "points"
+            ]
+        }
+    }
+}

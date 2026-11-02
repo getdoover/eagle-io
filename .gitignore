@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+packages_export/
+requirements.txt
+package.zip
