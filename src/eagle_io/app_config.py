@@ -24,6 +24,16 @@ class PointConfig(config.Object):
             "Leave blank to keep the point's eagle.io name."
         ),
     )
+    tag = config.String(
+        "Tag",
+        name="tag",
+        default=None,
+        description=(
+            "Also record this point as a tag of this app (e.g. river_level): "
+            "the latest reading as its current value, and every reading in its "
+            "history at its own time. Leave blank to only relay it."
+        ),
+    )
 
 
 class EagleIoConfig(config.Schema):
@@ -47,8 +57,9 @@ class EagleIoConfig(config.Schema):
         name="points",
         element=PointConfig("Point"),
         description=(
-            "Points to follow by id, or to rename. A point listed here that is "
-            "also under the location above is followed once, under this name."
+            "Points to follow by id, to rename, or to record as tags. A point "
+            "listed here that is also under the location above is followed "
+            "once, with these settings."
         ),
     )
     target_channel = config.String(
@@ -58,7 +69,7 @@ class EagleIoConfig(config.Schema):
         description=(
             "Doover channel each batch of new records is written to, as "
             '{"source": "eagle.io", "payload": <JTS>}. Point a JTS Renderer\'s '
-            "subscription at it."
+            "subscription at it. Leave blank to only record the tags."
         ),
     )
     first_poll_hours = config.Number(

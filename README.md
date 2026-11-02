@@ -1,12 +1,18 @@
 # eagle.io
 
 A Doover processor that follows points in [eagle.io](https://eagle.io) and
-relays their new readings into Doover. It does no interpretation itself: every
-15 minutes it asks eagle.io what has arrived since the last poll and writes it
-to a channel as JTS (JSON Time Series), eagle.io's own format. A
-**JTS Renderer** (from [mqtt-bridge](https://github.com/getdoover/mqtt-bridge))
-subscribed to that channel turns the columns into tags and a UI, the same way
-it does for eagle.io's MQTT feed.
+brings their new readings into Doover. It does no interpretation itself: every
+15 minutes it asks eagle.io what has arrived since the last poll, then
+
+- records the points you give a **Tag** as tags of this app (`tag_values`):
+  the newest reading as the current value, every reading in history at its own
+  time;
+- relays everything to a channel as JTS (JSON Time Series), eagle.io's own
+  format, where a **JTS Renderer** (from
+  [mqtt-bridge](https://github.com/getdoover/mqtt-bridge)) can turn the columns
+  into tags and a UI, the same way it does for eagle.io's MQTT feed.
+
+Use either or both.
 
 ```
 eagle.io  --(HTTP poll, JTS)-->  eagle_io  --(channel "eagle_io")-->  jts_renderer  -->  tags
@@ -30,8 +36,8 @@ minutes per IP address.
 | --- | --- |
 | **API Key** | An eagle.io API key that can read the points. |
 | **Location or Data Source ID** | Follow every point under this location or source, under its eagle.io name. |
-| **Points** | Points to follow by id, optionally with a **Name**. A name renames the column, and so the tag the renderer writes (`River Level` → `river_level`). Listing a point already under the location just renames it. |
-| **Target Channel** | Where batches go (default `eagle_io`). Set the JTS Renderer's subscription and Source Channel to the same name. |
+| **Points** | Points to follow by id, each with an optional **Name** and **Tag**. **Name** renames the JTS column, and so the tag the renderer writes (`River Level` → `river_level`). **Tag** records the point as a tag of this app (e.g. `river_level`). Listing a point already under the location just applies these settings. |
+| **Target Channel** | Where JTS batches go (default `eagle_io`). Set the JTS Renderer's subscription and Source Channel to the same name. Leave blank to only record tags. |
 | **First Poll (hours)** *(advanced)* | How far back a new install reads (default 24). |
 | **Schedule** *(advanced)* | Default every 15 minutes. |
 
@@ -49,7 +55,14 @@ the same channel.
 
 ## Tags
 
-`modified_since` (end of the last poll's window, the cursor), `last_poll_at`,
+Each mapped point's tag holds its newest reading. Its history is one
+`tag_values` message per reading, at the reading's time plus the tag's position
+in milliseconds: Doover keys messages by time, and a logger's points can arrive
+in different polls for the same record time, so tags never share a message.
+A late upload of older readings goes into history without replacing a newer
+current value (`tag_times` tracks the time each tag holds).
+
+The app's own bookkeeping tags: `modified_since` (end of the last poll's window, the cursor), `last_poll_at`,
 `points`, `records_relayed` and `last_error`. A failed poll leaves the cursor
 alone, so the next poll retries the same window.
 

@@ -5,6 +5,7 @@
         "type": "PRO",
         "visibility": "PUB",
         "allow_many": true,
+        "organisation_id": null,
         "description": "Polls eagle.io for newly arrived readings from a location's points and relays them to a Doover channel as JTS, for a JTS Renderer to turn into tags.",
         "long_description": "README.md",
         "depends_on": [],
@@ -54,7 +55,7 @@
                     "x-hidden": false,
                     "type": "array",
                     "x-required": true,
-                    "description": "Points to follow by id, or to rename. A point listed here that is also under the location above is followed once, under this name.",
+                    "description": "Points to follow by id, to rename, or to record as tags. A point listed here that is also under the location above is followed once, with these settings.",
                     "x-position": 2,
                     "items": {
                         "title": "Point",
@@ -84,6 +85,19 @@
                                 "description": "Column name to publish the point under, which consumers such as the JTS Renderer turn into the tag key ('River Level' -> river_level). Leave blank to keep the point's eagle.io name.",
                                 "default": null,
                                 "x-position": 2
+                            },
+                            "tag": {
+                                "title": "Tag",
+                                "x-name": "tag",
+                                "x-hidden": false,
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "x-required": false,
+                                "description": "Also record this point as a tag of this app (e.g. river_level): the latest reading as its current value, and every reading in its history at its own time. Leave blank to only relay it.",
+                                "default": null,
+                                "x-position": 3
                             }
                         },
                         "additionalElements": true,
@@ -103,7 +117,7 @@
                         "null"
                     ],
                     "x-required": false,
-                    "description": "Doover channel each batch of new records is written to, as {\"source\": \"eagle.io\", \"payload\": <JTS>}. Point a JTS Renderer's subscription at it.",
+                    "description": "Doover channel each batch of new records is written to, as {\"source\": \"eagle.io\", \"payload\": <JTS>}. Point a JTS Renderer's subscription at it. Leave blank to only record the tags.",
                     "default": "eagle_io",
                     "x-position": 3
                 },

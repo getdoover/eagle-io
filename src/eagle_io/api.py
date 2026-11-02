@@ -12,7 +12,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 DEFAULT_URL = "https://api.eagle.io/api/v1"
@@ -29,14 +29,22 @@ class EagleIoError(Exception):
 
 
 def _get(base_url: str, api_key: str, path: str, params: dict[str, str]) -> Any:
-    url = f"{base_url.rstrip('/')}/{path}?{urllib.parse.urlencode(params, safe='(),:$')}"
-    request = urllib.request.Request(url, headers={"X-Api-Key": api_key, "Accept": "application/json"})
+    url = (
+        f"{base_url.rstrip('/')}/{path}?{urllib.parse.urlencode(params, safe='(),:$')}"
+    )
+    request = urllib.request.Request(
+        url, headers={"X-Api-Key": api_key, "Accept": "application/json"}
+    )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.load(response)
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
-        hint = {401: "API key rejected", 403: "API key lacks access", 429: "rate limited"}.get(e.code)
+        hint = {
+            401: "API key rejected",
+            403: "API key lacks access",
+            429: "rate limited",
+        }.get(e.code)
         raise EagleIoError(f"HTTP {e.code} on {path}: {hint or detail}", e.code) from e
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise EagleIoError(f"{path}: {e}") from e
@@ -71,12 +79,17 @@ def points_under(base_url: str, api_key: str, node_id: str) -> list[dict]:
         if is_point(node):
             found.append(node)
         elif is_source(node):
-            found.extend(n for n in children(base_url, api_key, node["_id"]) if is_point(n))
+            found.extend(
+                n for n in children(base_url, api_key, node["_id"]) if is_point(n)
+            )
     return found
 
 
 def iso(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
+    return (
+        t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.")
+        + f"{t.microsecond // 1000:03d}Z"
+    )
 
 
 def modified(

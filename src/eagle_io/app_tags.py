@@ -1,9 +1,13 @@
 """Bookkeeping kept between polls, and the poller's health."""
 
 from pydoover import tags
+from pydoover.tags import Tag
 
 
 class EagleIoTags(tags.Tags):
+    # Mapped tag -> ms since epoch of the reading it currently holds, so a late
+    # upload of older readings goes into history without replacing a newer value.
+    tag_times = Tag("object", default={})
     # End of the last successful poll's MODIFIED window (ISO 8601, UTC).
     modified_since = tags.String(default="")
     last_poll_at = tags.Number(default=None)  # ms since epoch

@@ -23,3 +23,4 @@ dev = ["pytest>=8.3.5", "pytest-asyncio>=0.26.0"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
