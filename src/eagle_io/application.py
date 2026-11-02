@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from pydoover.models import DeploymentEvent, ManualInvokeEvent, ScheduleEvent
+from pydoover.models.data import BatchMutationItem
 from pydoover.processor import Application
 
 from . import api
@@ -29,9 +30,16 @@ log = logging.getLogger(__name__)
 
 # Each poll re-reads a little of the previous window, so a record committed
 # while the last poll was running isn't missed. Re-writing a reading is
-# harmless: history messages are keyed by time, and the renderer skips records
-# it has already written.
+# harmless: its history message has a fixed id (see history_id), so it is
+# overwritten rather than duplicated, and the renderer skips records it has
+# already written.
 OVERLAP = timedelta(minutes=5)
+DOOVER_EPOCH_MS = 1735689600000
+# Snowflake fields reserved for this app's history messages, apart from the
+# platform's own ids and the FWIN CSV import's (region 15, instance 1023).
+HISTORY_REGION, HISTORY_INSTANCE, MESSAGE_TYPE = 15, 1022, 2
+MAX_SLOTS = 16  # the id's 4-bit sequence field holds the tag's slot
+BATCH = 50
 _UNSAFE = re.compile(r"[^0-9a-zA-Z_]+")
 
 
@@ -94,14 +102,40 @@ def tag_readings(
     return readings
 
 
-def history_messages(readings: dict[str, list[tuple[int, object]]]) -> dict[int, dict]:
-    """ms -> {tag: value}: one history message per reading time, holding every
-    mapped tag read at that time."""
-    messages: dict[int, dict] = defaultdict(dict)
+def history_id(ms: int, slot: int) -> int:
+    """A fixed message id for one tag's reading at one time.
+
+    eagle.io often re-reports a record (late uploads, a running total updated
+    through its period, the poll overlap), and a message written again under
+    the same id replaces the old one instead of adding a duplicate that would
+    be counted twice in rain totals.
+    """
+    return (
+        ((ms - DOOVER_EPOCH_MS) << 22)
+        | (HISTORY_REGION << 18)
+        | (HISTORY_INSTANCE << 8)
+        | (MESSAGE_TYPE << 4)
+        | slot
+    )
+
+
+def history_items(
+    readings: dict[str, list[tuple[int, object]]], order: list[str]
+) -> list[tuple[int, int | None, str, object]]:
+    """(ms, message id, tag, value) per reading, oldest first.
+
+    One message per tag and time, its id fixed by both. A tag's slot is its
+    position in the configured points, so adding a point at the end keeps the
+    others' ids; tags past the 16th get no fixed id.
+    """
+    items = []
     for tag, values in readings.items():
+        slot = order.index(tag)
         for ms, value in values:
-            messages[ms][tag] = value
-    return dict(messages)
+            items.append(
+                (ms, history_id(ms, slot) if slot < MAX_SLOTS else None, tag, value)
+            )
+    return sorted(items, key=lambda i: (i[0], i[2]))
 
 
 class EagleIo(Application):
@@ -190,11 +224,19 @@ class EagleIo(Application):
             return 0
         readings = tag_readings(docs, tags)
 
-        messages = history_messages(readings)
-        for ms in sorted(messages):
-            await self.api.create_message(
-                "tag_values", {self.app_key: messages[ms]}, timestamp=ms
+        order = list(dict.fromkeys(tags.values()))
+        items = [
+            BatchMutationItem(
+                agent_id=self.agent_id,
+                channel_name="tag_values",
+                data={self.app_key: {tag: value}},
+                message_id=mid,
+                timestamp=ms,
             )
+            for ms, mid, tag, value in history_items(readings, order)
+        ]
+        for i in range(0, len(items), BATCH):
+            await self.api.batch_create_messages(items[i : i + BATCH])
 
         # A late upload can hold readings older than the current value; those
         # belong in history only.
@@ -217,7 +259,7 @@ class EagleIo(Application):
             if ms >= (self.get_tag(key) or 0):
                 await self.set_tag(key, ms)
         await self.tags.tag_times.set(times)
-        return len(messages)
+        return len(items)
 
     def _points(self, base_url: str, api_key: str) -> dict[str, Point]:
         node_id = (self.config.node_id.value or "").strip()

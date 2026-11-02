@@ -7,7 +7,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from eagle_io import api
-from eagle_io.application import OVERLAP, EagleIo, Point, resolve_points, tag_key
+from eagle_io.application import (
+    OVERLAP,
+    EagleIo,
+    Point,
+    history_id,
+    resolve_points,
+    tag_key,
+)
 
 FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "historic_modified.json").read_text()
@@ -103,6 +110,13 @@ def fake_app(
     history = []
     current = {}
 
+    async def batch_create_messages(items):
+        for it in items:
+            assert it.agent_id == 42
+            # Stored by id, as Doover does: writing the same id again replaces it.
+            history[:] = [h for h in history if h[2] != it.message_id]
+            history.append((it.timestamp, it.data, it.message_id))
+
     async def create_message(channel, data, timestamp=None):
         (history if channel == "tag_values" else sent).append(
             (timestamp, data) if channel == "tag_values" else (channel, data)
@@ -137,8 +151,11 @@ def fake_app(
             last_error=FakeTag(""),
             tag_times=FakeTag(tag_times or {}),
         ),
-        api=SimpleNamespace(create_message=create_message),
+        api=SimpleNamespace(
+            create_message=create_message, batch_create_messages=batch_create_messages
+        ),
         app_key="eagle_io_1",
+        agent_id=42,
         set_tag=set_tag,
         get_tag=get_tag,
         _points=lambda base, key: (
@@ -210,22 +227,36 @@ async def test_mapped_points_become_tags_with_history(monkeypatch):
         "river_level": ms("2026-01-01T01:00:00Z"),
         "rain_total": ms("2026-01-01T01:00:00Z"),
     }
-    # Every reading lands in history at its own time, tags read together in one message.
-    assert sorted(app.history, key=lambda h: h[0]) == [
-        (
-            ms("2026-01-01T00:00:00Z"),
-            {"eagle_io_1": {"river_level": 1.234, "rain_total": 100.0}},
-        ),
-        (ms("2026-01-01T00:30:00Z"), {"eagle_io_1": {"river_level": 1.24}}),
-        (
-            ms("2026-01-01T01:00:00Z"),
-            {"eagle_io_1": {"river_level": 1.251, "rain_total": 100.4}},
-        ),
-    ]
-    # Unmapped points (battery, serial) are not recorded as tags.
-    assert all(
-        set(d["eagle_io_1"]) <= {"river_level", "rain_total"} for _, d in app.history
+    # Every reading lands in history at its own time: one message per tag and
+    # time, with an id fixed by both (river_level is slot 0, rain_total slot 1).
+    t0, t30, t60 = (
+        ms(f"2026-01-01T{t}Z") for t in ("00:00:00", "00:30:00", "01:00:00")
     )
+    assert sorted(app.history, key=lambda h: (h[0], h[2])) == [
+        (t0, {"eagle_io_1": {"river_level": 1.234}}, history_id(t0, 0)),
+        (t0, {"eagle_io_1": {"rain_total": 100.0}}, history_id(t0, 1)),
+        (t30, {"eagle_io_1": {"river_level": 1.24}}, history_id(t30, 0)),
+        (t60, {"eagle_io_1": {"river_level": 1.251}}, history_id(t60, 0)),
+        (t60, {"eagle_io_1": {"rain_total": 100.4}}, history_id(t60, 1)),
+    ]
+
+
+async def test_rereading_a_record_overwrites_instead_of_duplicating(monkeypatch):
+    app = fake_app(monkeypatch)
+    await EagleIo.poll(app)
+    first = sorted(app.history, key=lambda h: (h[0], h[2]))
+    await EagleIo.poll(app)  # the same records come back, e.g. in the overlap
+    assert sorted(app.history, key=lambda h: (h[0], h[2])) == first
+
+
+def test_history_ids_are_distinct_per_tag_and_time_and_outside_other_id_spaces():
+    a, b = ms("2026-01-01T00:00:00Z"), ms("2026-01-01T00:00:00.001Z")
+    ids = {history_id(t, slot) for t in (a, b) for slot in range(16)}
+    assert len(ids) == 32
+    # Same time decodes back from the id, as Doover's snowflakes do.
+    assert (history_id(a, 3) >> 22) + 1735689600000 == a
+    # Region 15 / instance 1022, apart from the CSV import's instance 1023.
+    assert (history_id(a, 0) >> 8) & 0x3FF == 1022
 
 
 async def test_late_older_readings_go_to_history_only(monkeypatch):
@@ -234,7 +265,7 @@ async def test_late_older_readings_go_to_history_only(monkeypatch):
     await EagleIo.poll(app)
     assert "river_level" not in app.current
     assert app.tags.tag_times.value["river_level"] == newer
-    assert any("river_level" in d["eagle_io_1"] for _, d in app.history)
+    assert any("river_level" in d["eagle_io_1"] for _, d, _ in app.history)
 
 
 async def test_blank_channel_records_tags_without_relaying(monkeypatch, caplog):

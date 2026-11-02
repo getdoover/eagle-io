@@ -56,8 +56,10 @@ the same channel.
 ## Tags
 
 Each mapped point's tag holds its newest reading. Its history goes into
-`tag_values` at each reading's own time, one message per time with every
-mapped tag read then. A late upload of older readings goes into history without replacing a newer
+`tag_values` at each reading's own time, one message per tag and time. Each
+message's id is fixed by that tag and time, so a record eagle.io reports again
+(late uploads, totals updated through their period, the 5-minute poll
+overlap) overwrites its message instead of duplicating it. A late upload of older readings goes into history without replacing a newer
 current value (`tag_times` tracks the time each tag holds).
 
 The app's own bookkeeping tags: `modified_since` (end of the last poll's window, the cursor), `last_poll_at`,
