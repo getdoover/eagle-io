@@ -98,6 +98,19 @@
                                 "description": "Also record this point as a tag of this app (e.g. river_level): the latest reading as its current value, and every reading in its history at its own time. Leave blank to only relay it.",
                                 "default": null,
                                 "x-position": 3
+                            },
+                            "time_tag": {
+                                "title": "Time Tag",
+                                "x-name": "time_tag",
+                                "x-hidden": false,
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "x-required": false,
+                                "description": "Also record when the Tag's current reading was taken (ms since epoch) under this tag, e.g. river_level_time. Points may share one (rain_time for every rain figure): it holds the newest of their times. Needs a Tag.",
+                                "default": null,
+                                "x-position": 4
                             }
                         },
                         "additionalElements": true,

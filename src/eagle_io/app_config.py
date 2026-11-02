@@ -34,6 +34,17 @@ class PointConfig(config.Object):
             "history at its own time. Leave blank to only relay it."
         ),
     )
+    time_tag = config.String(
+        "Time Tag",
+        name="time_tag",
+        default=None,
+        description=(
+            "Also record when the Tag's current reading was taken (ms since "
+            "epoch) under this tag, e.g. river_level_time. Points may share "
+            "one (rain_time for every rain figure): it holds the newest of "
+            "their times. Needs a Tag."
+        ),
+    )
 
 
 class EagleIoConfig(config.Schema):

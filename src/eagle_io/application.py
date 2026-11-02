@@ -39,6 +39,7 @@ _UNSAFE = re.compile(r"[^0-9a-zA-Z_]+")
 class Point:
     name: str | None = None  # JTS column name; None keeps eagle.io's
     tag: str | None = None  # tag key to record the point under, if any
+    time_tag: str | None = None  # tag holding the time (ms) of the tag's newest reading
 
 
 def parse_time(raw: str) -> datetime | None:
@@ -54,13 +55,17 @@ def tag_key(raw: str) -> str:
 
 
 def resolve_points(
-    found: list[dict], listed: list[tuple[str, str, str]]
+    found: list[dict], listed: list[tuple[str, str, str, str]]
 ) -> dict[str, Point]:
     """Point id -> its settings, discovered points first, then listed ones."""
     points: dict[str, Point] = {n["_id"]: Point() for n in found}
-    for point_id, name, tag in listed:
+    for point_id, name, tag, time_tag in listed:
         if point_id:
-            points[point_id] = Point(name or None, tag_key(tag) or None)
+            tag = tag_key(tag) or None
+            # A time tag only means something alongside a value tag.
+            points[point_id] = Point(
+                name or None, tag, (tag and tag_key(time_tag)) or None
+            )
     return points
 
 
@@ -194,11 +199,23 @@ class EagleIo(Application):
         # A late upload can hold readings older than the current value; those
         # belong in history only.
         times = dict(self.tags.tag_times.value or {})
+        time_tag_of = {
+            p.tag: p.time_tag for p in points.values() if p.tag and p.time_tag
+        }
+        stamped: dict[str, int] = {}
         for tag, values in readings.items():
             ms, value = max(values, key=lambda r: r[0])
             if ms >= times.get(tag, 0):
                 await self.set_tag(tag, value)
                 times[tag] = ms
+                if tag in time_tag_of:
+                    # Points can share a time tag (rain_time for every rain
+                    # figure); it holds the newest of their times.
+                    key = time_tag_of[tag]
+                    stamped[key] = max(ms, stamped.get(key, 0))
+        for key, ms in stamped.items():
+            if ms >= (self.get_tag(key) or 0):
+                await self.set_tag(key, ms)
         await self.tags.tag_times.set(times)
         return len(messages)
 
@@ -210,6 +227,7 @@ class EagleIo(Application):
                 (p.point_id.value or "").strip(),
                 (p.name.value or "").strip(),
                 (p.tag.value or "").strip(),
+                (p.time_tag.value or "").strip(),
             )
             for p in self.config.points.elements
         ]

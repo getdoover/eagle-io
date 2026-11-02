@@ -27,13 +27,17 @@ def test_resolve_points_listed_names_win_and_keep_order():
     found = [{"_id": LEVEL}, {"_id": RAIN}]
     points = resolve_points(
         found,
-        [(RAIN, "Rain Counter", "Rain Total"), ("extra", "", ""), ("", "ignored", "x")],
+        [
+            (RAIN, "Rain Counter", "Rain Total", "Rain Time"),
+            ("extra", "", "", "orphan_time"),
+            ("", "ignored", "x", ""),
+        ],
     )
     assert list(points) == [LEVEL, RAIN, "extra"]
     assert points == {
         LEVEL: Point(),
-        RAIN: Point("Rain Counter", "rain_total"),
-        "extra": Point(),
+        RAIN: Point("Rain Counter", "rain_total", "rain_time"),
+        "extra": Point(),  # a time tag without a tag is dropped
     }
 
 
@@ -88,7 +92,12 @@ class FakeTag:
 
 
 def fake_app(
-    monkeypatch, modified_since="", fail=False, channel="eagle_io", tag_times=None
+    monkeypatch,
+    modified_since="",
+    fail=False,
+    channel="eagle_io",
+    tag_times=None,
+    points=None,
 ):
     sent = []
     history = []
@@ -101,6 +110,9 @@ def fake_app(
 
     async def set_tag(key, value):
         current[key] = value
+
+    def get_tag(key, default=None):
+        return current.get(key, default)
 
     def modified(base, key, ids, start, end):
         if fail:
@@ -128,10 +140,14 @@ def fake_app(
         api=SimpleNamespace(create_message=create_message),
         app_key="eagle_io_1",
         set_tag=set_tag,
-        _points=lambda base, key: {
-            LEVEL: Point("River Level", "river_level"),
-            RAIN: Point(None, "rain_total"),
-        },
+        get_tag=get_tag,
+        _points=lambda base, key: (
+            points
+            or {
+                LEVEL: Point("River Level", "river_level", "river_level_time"),
+                RAIN: Point(None, "rain_total", "rain_time"),
+            }
+        ),
         sent=sent,
         history=history,
         current=current,
@@ -184,7 +200,12 @@ async def test_mapped_points_become_tags_with_history(monkeypatch):
     await EagleIo.poll(app)
 
     # Newest reading of each mapped point is its current value.
-    assert app.current == {"river_level": 1.251, "rain_total": 100.4}
+    assert app.current == {
+        "river_level": 1.251,
+        "river_level_time": ms("2026-01-01T01:00:00Z"),
+        "rain_total": 100.4,
+        "rain_time": ms("2026-01-01T01:00:00Z"),
+    }
     assert app.tags.tag_times.value == {
         "river_level": ms("2026-01-01T01:00:00Z"),
         "rain_total": ms("2026-01-01T01:00:00Z"),
@@ -225,3 +246,25 @@ async def test_blank_channel_records_tags_without_relaying(monkeypatch, caplog):
     assert app.tags.records_relayed.value == 0
     # Nothing logs the JTS itself, only counts.
     assert "docType" not in caplog.text and "1.251" not in caplog.text
+
+
+async def test_points_sharing_a_time_tag_get_the_newest_time(monkeypatch):
+    battery = "000000000000000000000001"
+    app = fake_app(
+        monkeypatch,
+        points={
+            RAIN: Point(None, "rain_total", "rain_time"),
+            battery: Point(None, "battery", "rain_time"),
+        },
+    )
+    await EagleIo.poll(app)
+    assert app.current["rain_time"] == ms("2026-01-01T01:00:00Z")
+    assert "river_level" not in app.current  # level isn't mapped here
+
+
+async def test_time_tag_never_goes_backwards(monkeypatch):
+    newer = ms("2026-01-02T00:00:00Z")
+    app = fake_app(monkeypatch)
+    app.current["rain_time"] = newer
+    await EagleIo.poll(app)
+    assert app.current["rain_time"] == newer
