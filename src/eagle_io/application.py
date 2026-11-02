@@ -35,10 +35,10 @@ log = logging.getLogger(__name__)
 # already written.
 OVERLAP = timedelta(minutes=5)
 DOOVER_EPOCH_MS = 1735689600000
-# Snowflake fields reserved for this app's history messages, apart from the
-# platform's own ids and the FWIN CSV import's (region 15, instance 1023).
-HISTORY_REGION, HISTORY_INSTANCE, MESSAGE_TYPE = 15, 1022, 2
-MAX_SLOTS = 16  # the id's 4-bit sequence field holds the tag's slot
+MESSAGE_TYPE = 2
+# The id's 4-bit sequence field holds the tag's slot; 15 is left for imports
+# and backfills written by other tools under the same scheme.
+MAX_SLOTS = 15
 BATCH = 50
 _UNSAFE = re.compile(r"[^0-9a-zA-Z_]+")
 
@@ -102,8 +102,23 @@ def tag_readings(
     return readings
 
 
-def history_id(ms: int, slot: int) -> int:
-    """A fixed message id for one tag's reading at one time.
+def device_bits(agent_id: int) -> int:
+    """The region and instance fields for one device's fixed message ids.
+
+    Message ids are treated as unique across devices (multi-device views drop
+    repeats), so the device has to be in the id, not just the time. A 32-bit
+    FNV-1a hash of the device id picks one of regions 8-15, which the platform
+    never hands out, and an instance within it.
+    """
+    h = 0x811C9DC5
+    for b in str(agent_id).encode():
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    region, instance = 8 | (h & 7), (h >> 3) & 0x3FF
+    return (region << 18) | (instance << 8)
+
+
+def history_id(ms: int, slot: int, agent_id: int) -> int:
+    """A fixed message id for one device's reading of one tag at one time.
 
     eagle.io often re-reports a record (late uploads, a running total updated
     through its period, the poll overlap), and a message written again under
@@ -112,28 +127,32 @@ def history_id(ms: int, slot: int) -> int:
     """
     return (
         ((ms - DOOVER_EPOCH_MS) << 22)
-        | (HISTORY_REGION << 18)
-        | (HISTORY_INSTANCE << 8)
+        | device_bits(agent_id)
         | (MESSAGE_TYPE << 4)
         | slot
     )
 
 
 def history_items(
-    readings: dict[str, list[tuple[int, object]]], order: list[str]
+    readings: dict[str, list[tuple[int, object]]], order: list[str], agent_id: int
 ) -> list[tuple[int, int | None, str, object]]:
     """(ms, message id, tag, value) per reading, oldest first.
 
     One message per tag and time, its id fixed by both. A tag's slot is its
     position in the configured points, so adding a point at the end keeps the
-    others' ids; tags past the 16th get no fixed id.
+    others' ids; tags past the 15th get no fixed id.
     """
     items = []
     for tag, values in readings.items():
         slot = order.index(tag)
         for ms, value in values:
             items.append(
-                (ms, history_id(ms, slot) if slot < MAX_SLOTS else None, tag, value)
+                (
+                    ms,
+                    history_id(ms, slot, agent_id) if slot < MAX_SLOTS else None,
+                    tag,
+                    value,
+                )
             )
     return sorted(items, key=lambda i: (i[0], i[2]))
 
@@ -235,7 +254,7 @@ class EagleIo(Application):
                 message_id=mid,
                 timestamp=ms,
             )
-            for ms, mid, tag, value in history_items(readings, order)
+            for ms, mid, tag, value in history_items(readings, order, self.agent_id)
         ]
         for i in range(0, len(items), BATCH):
             await self.api.batch_create_messages(items[i : i + BATCH])

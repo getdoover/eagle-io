@@ -58,7 +58,7 @@ the same channel.
 
 Each mapped point's tag holds its newest reading. Its history goes into
 `tag_values` at each reading's own time, one message per tag and time. Each
-message's id is fixed by that tag and time, so a record eagle.io reports again
+message's id is fixed by the device, that tag and time (FNV-1a hash of the device id in the region/instance bits, regions 8-15, the tag's slot in the sequence bits), so a record eagle.io reports again
 (late uploads, totals updated through their period, the 5-minute poll
 overlap) overwrites its message instead of duplicating it. A late upload of older readings goes into history without replacing a newer
 current value (`tag_times` tracks the time each tag holds).

@@ -11,6 +11,7 @@ from eagle_io.application import (
     OVERLAP,
     EagleIo,
     Point,
+    device_bits,
     history_id,
     resolve_points,
     tag_key,
@@ -242,11 +243,11 @@ async def test_mapped_points_become_tags_with_history(monkeypatch):
         ms(f"2026-01-01T{t}Z") for t in ("00:00:00", "00:30:00", "01:00:00")
     )
     assert sorted(app.history, key=lambda h: (h[0], h[2])) == [
-        (t0, {"eagle_io_1": {"river_level": 1.234}}, history_id(t0, 0)),
-        (t0, {"eagle_io_1": {"rain_total": 100.0}}, history_id(t0, 1)),
-        (t30, {"eagle_io_1": {"river_level": 1.24}}, history_id(t30, 0)),
-        (t60, {"eagle_io_1": {"river_level": 1.251}}, history_id(t60, 0)),
-        (t60, {"eagle_io_1": {"rain_total": 100.4}}, history_id(t60, 1)),
+        (t0, {"eagle_io_1": {"river_level": 1.234}}, history_id(t0, 0, 42)),
+        (t0, {"eagle_io_1": {"rain_total": 100.0}}, history_id(t0, 1, 42)),
+        (t30, {"eagle_io_1": {"river_level": 1.24}}, history_id(t30, 0, 42)),
+        (t60, {"eagle_io_1": {"river_level": 1.251}}, history_id(t60, 0, 42)),
+        (t60, {"eagle_io_1": {"rain_total": 100.4}}, history_id(t60, 1, 42)),
     ]
 
 
@@ -258,14 +259,18 @@ async def test_rereading_a_record_overwrites_instead_of_duplicating(monkeypatch)
     assert sorted(app.history, key=lambda h: (h[0], h[2])) == first
 
 
-def test_history_ids_are_distinct_per_tag_and_time_and_outside_other_id_spaces():
+def test_history_ids_are_distinct_per_device_tag_and_time():
     a, b = ms("2026-01-01T00:00:00Z"), ms("2026-01-01T00:00:00.001Z")
-    ids = {history_id(t, slot) for t in (a, b) for slot in range(16)}
-    assert len(ids) == 32
-    # Same time decodes back from the id, as Doover's snowflakes do.
-    assert (history_id(a, 3) >> 22) + 1735689600000 == a
-    # Region 15 / instance 1022, apart from the CSV import's instance 1023.
-    assert (history_id(a, 0) >> 8) & 0x3FF == 1022
+    ids = {
+        history_id(t, slot, dev) for t in (a, b) for slot in range(15) for dev in (1, 2)
+    }
+    assert len(ids) == 60
+    # The time decodes back from the id, as Doover's snowflakes do.
+    assert (history_id(a, 3, 42) >> 22) + 1735689600000 == a
+    # Regions 8-15 only: the platform hands out region 0.
+    assert 8 <= (history_id(a, 0, 42) >> 18) & 0xF <= 15
+    # Matches the FNV-1a scheme the FWIN CSV import and backfills use.
+    assert device_bits(242829419004068104) == 4186624
 
 
 async def test_late_older_readings_go_to_history_only(monkeypatch):
